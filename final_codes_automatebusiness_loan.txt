@@ -1,0 +1,169 @@
+# Firstly we will explore DDL and DML functions
+DDL: 
+CREATE TABLE loans (
+    LoanNr_ChkDgt INTEGER,
+    Name varchar,
+    City varchar,
+    State CHAR(2),
+    Zip INTEGER,
+    Bank varchar,
+    BankState CHAR(2),
+    NAICS INTEGER,
+    ApprovalDate DATE,
+    ApprovalFY INTEGER,
+    Term INTEGER,
+    NoEmp INTEGER,
+    NewExist INTEGER,
+    CreateJob INTEGER,
+    RetainedJob INTEGER,
+    FranchiseCode INTEGER,
+    UrbanRural INTEGER,
+    RevLineCr varchar,
+    LowDoc varchar,
+    ChgOffDate DATE,
+    DisbursementDate DATE,
+    DisbursementGross varchar,
+    BalanceGross varchar,
+    MIS_Status varchar,
+    ChgOffPrinGr varchar,
+    GrAppv varchar,
+    SBA_Appv varchar
+);
+-----------------------------------------------------------------------------------------
+# After importing the data we will check the table by running the following query
+Select * from loans 
+limit 100;
+-----------------------------------------------------------------------------------------
+# Now we see that there is lot of impurity in the data the column types are not proper we will first try to clean the data
+ 
+#To remove the $ signs from chgoffpringr column in the loans table we will use the following steps :-
+ALTER TABLE loans ADD COLUMN chgoffpringr_int numeric(12,2);
+UPDATE loans SET chgoffpringr_int = CAST(REPLACE(REPLACE(REPLACE(chgoffpringr, '$', ''), ',', ''), ' ', '') AS numeric(12,2));
+ALTER TABLE loans DROP COLUMN chgoffpringr;
+ALTER TABLE loans RENAME COLUMN chgoffpringr_int TO chgoffpringr;
+# similarly we can do the same for other columns which should be int but due to $ sign we have taken it as  varchar we will update the into int such as :- disbursementgross,grappv,sba_appv,balancegross.
+
+We saw that our approval column data type is not int this is because of the value is wrongly enterted as 	1976A
+We will remove a and coorect the column data type to int by following query
+UPDATE your_table_name
+SET approvalfy = REPLACE(approvalfy, 'A', '')::integer
+-----------------------------------------------------------------------------------------
+DML:
+# Now we will explore information from the data by using DML commands
+Debt-to-Income Ratio (DTI):
+DTI is the ratio of a borrower's monthly debt payments to their monthly income. A lower DTI indicates that the borrower has more disposable income available to repay the loan.
+SELECT (SUM(ChgOffPrinGr) + SUM(BalanceGross)) / SUM(DisbursementGross) AS DTI
+FROM public.loans;
+
+Average loan amount (GrAppv) approved by the bank : 
+This metric is important as it can help the bank in setting loan amounts that are reasonable and competitive.
+SELECT ROUND(AVG(GrAppv), 4) AS avg_loan_amount
+FROM public.loans;
+Number of loans approved and declined by the bank:
+This metric is important as it can help the bank understand its loan approval rate and identify areas for improvement.
+select MIS_Status,count(*) FROM loans group by MIS_status;
+
+Average number of employees (NoEmp) for approved loans:,
+This metric holds significance as it allows the bank to assess the borrower's capacity to pay back the loan depending on the size of their organization.
+
+SELECT ROUND(AVG(NoEmp)::numeric, 4) AS avg_num_employees
+FROM loans
+WHERE MIS_Status = 'P I F';
+
+Average loan term (Term) for approved loans:
+This metric is important as it can help the bank set loan terms that are suitable for the borrower and minimize the threat of loan dereliction.
+
+SELECT ROUND(AVG(Term), 2) AS avg_loan_term
+FROM loans
+WHERE MIS_Status = 'P I F';
+
+The ratio of charged off principal amount (ChgOffPrinGr) to gross loan amount (GrAppv):
+This standard is important as it can help the bank assess the creditworthiness of its borrowers and estimate its loan portfolio threat.
+
+SELECT ROUND(SUM(ChgOffPrinGr)/SUM(GrAppv), 2) AS charge_off_ratio 
+from loans; 
+checking the number of paid and defaults as per urban and rural status 
+This metric is essential as this will give a glance of the most number of paid or default are from which sector 
+select count(*),mis_status ,urbanrural  
+from loans
+ group by mis_status,urbanrural;
+# We can use more different metrics as per business need to get insights from the data such as 
+We can check the name and defaulted or paid loan amounts more than 5000000
+select Name,grappv,mis_status from loans where GrAppv >= 5000000;
+
+-----------------------------------------------------------------------------------------
+CASE :
+Count of loan (paid and defaulted )application by type of business :
+This metric is very important as this will give bank an idea of what the ratio of loan defaulted and paid by new and existing business
+SELECT count(*),MIS_Status, count(NewExist),
+CASE
+    WHEN NewExist =2 THEN 'new_business'
+    WHEN NewExist = 1 THEN 'existing_business'
+    ELSE 'not_defined'
+END AS BUSINESS_STATUS
+FROM loans group by MIS_Status,BUSINESS_STATUS;
+
+-----------------------------------------------------------------------------------------
+Now we will try to check the loans status by using different metrics we can differ the metrics according to the need of the bank and we can play along different metrics
+SELECT 
+    LoanNr_ChkDgt,MIS_Status,GrAppv,term,NoEmp,DisbursementGross,ChgOffPrinGr,
+    CASE
+        WHEN GrAppv >= 50000 AND GrAppv <= 250000 AND Term <= 84 AND NoEmp <= 100 
+		AND DisbursementGross <= 250000 AND ChgOffPrinGr <= 10000 THEN 'Approved'
+        WHEN GrAppv >= 250000 AND GrAppv <= 500000 AND Term <= 120 AND NoEmp<= 250 
+		AND DisbursementGross<= 500000 AND ChgOffPrinGr <= 50000 THEN 'Approved'
+        ELSE 'Declined'
+    END AS Loan_Status
+FROM loans;
+
+This query selects several columns from the loans table and uses a CASE statement to assign a loan status to each row based on certain criteria. The criteria for "Approved" loans are:
+
+"GrAppv" (the approved loan amount) is between $50,000 and $250,000
+"Term" (the loan term in months) is less than or equal to 84
+"NoEmp" (the number of employees) is less than or equal to 100
+"DisbursementGross" (the total amount disbursed) is less than or equal to $250,000
+"ChgOffPrinGr" (the charged-off principal amount) is less than or equal to $10,000
+
+The criteria for "Approved" loans with higher amounts are:
+
+"GrAppv" is between $250,000 and $500,000
+"Term" is less than or equal to 120
+"NoEmp" is less than or equal to 250
+"DisbursementGross" is less than or equal to $500,000
+"ChgOffPrinGr" is less than or equal to $50,000
+All other loans are assigned a status of "Declined".
+
+The thresholds for these criteria and loan statuses were likely chosen based on industry standards, risk assessment, and the loan approval policies. The specific thresholds chosen may vary depending on the specific context and goals of the analysis.
+-----------------------------------------------------------------------------------------
+
+Using Window functions, explore the top 3, 5 or 10 customers based on certain metrics (Eg - Find the top 5 customers with highest bank balance who have not defaulted on a loan in the last 2 years). This will help you understand your ideal loan applicants.
+
+WITH CTE AS (
+  SELECT Name ,ApprovalDate,MIS_Status,GrAppv,
+    row_number() over(PARTITION BY MIS_Status  ORDER BY GrAppv DESC) AS rowno
+  FROM public.loans
+)
+SELECT Name ,ApprovalDate,MIS_Status,GrAppv
+FROM CTE
+WHERE ApprovalDate < TO_DATE('2012-01-01', 'YYYY-MM-DD') and MIS_Status='P I F' limit 5;
+
+
+
+-----------------------------------------------------------------------------------------
+
+-- Write out your final query that creates a column in the table (Refer to the commands in C3) which says whether a customer is eligible for a loan or not based on the criterion you set in the previous component.
+
+SELECT Name, MIS_Status,
+  CASE
+      WHEN MIS_Status ='CHGOFF' THEN 'Not eligible for loan'
+      WHEN MIS_Status = 'P I F' THEN 'Eligible for loan'
+      ELSE 'Not defined'
+  END AS Loan_Eligibility
+FROM loans
+LIMIT 1000;
+
+
+
+
+
+
